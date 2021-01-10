@@ -1,0 +1,114 @@
+---
+title: "Bookbinders"
+author: "Nancy Lopez Ramirez"
+date: "9/11/2020"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(corrplot)
+library("PerformanceAnalytics")
+library(caret)
+```
+
+```{r}
+#Loading the data
+train = read_xlsx('BBBC-Train.xlsx')
+test = read_xlsx('BBBC-Test.xlsx')
+
+#Exploring the data
+dim(train)
+dim(test)
+
+names(train)
+summary(train)
+
+summary(train$Choice)
+hist(train$Choice)
+sum(train$Choice == '1')
+sum(train$Choice == '0')
+
+### The train data set has n = 1600, where Choice=1 in 400 and Choice=0 in 1200. 
+### The response variables values are somewhat unbalanced.
+
+
+hist(train$Amount_purchased)
+hist(train$Frequency)
+hist(train$Last_purchase)
+
+```
+
+```{r}
+###  I am fitting a multiple linear regression model on the train data set. 
+
+###  I am removing Observation, since that is simply an index. 
+###  While inspecting the data, I noticed Last_purchase and First_purchase are correlated. So I am removing First_purchase.
+
+###  After fitting the model with all variables (except Observation), except Last_purchase, P_Youth had a p-value above 0.05, so I removed and re-ran the model. 
+
+###  The linear regression model has a small p-value of 2.2e-16 which is significant, but it has an R-square value of 0.22. In other words, it only explains 22% of the variance.
+###  Most importatly, the model did not fulfill all 4 of the OLS assumptions mainly due to the fact that the response variable is really categorical (even if its values are 1 and 0). 
+###  This tells me the linear regression model is not the best option for this particular question and with this type of data.
+###  The Multiple Linear Regression technique is best used to answer questions with continuous response variables. 
+
+### Some coefficient estimates are interesting, however. For instance, P_Art has estimate of 0.15, which makes sense. The more art books a customer has purchased in the past, the higher the probability that they will purchase The Art History of Florence. 
+
+linear.mod = lm(Choice~.-First_purchase -Observation - P_Youth, data=train)
+summary(linear.mod)
+
+```
+
+```{r}
+###  Regression Diagnostics
+
+### Generating Diagnostic Plots
+
+par(mfrow = c(2,2))
+plot(linear.mod)
+cor(train)
+
+### Checking OLS Assusmptions
+
+###  1: LINEARITY OF THE DATA
+###  The residuals plot shows a very clear pattern between the residuals and fitted values. The pattern is very obviously caused by the only two response values of 0 and 1.
+#### I cannot assume a linear relationship between the predictors and the outcome variables. 
+
+###  2: HOMOGENEITY OF VARIANCE
+###  The variances of the residual points are not spread equally along the range of the fitted values. The variance of the residuals actually
+###  decreases as the fitted values approach 0 and 1. Heteroskedasticity can be addressed with a log or square root transformation of the response
+###  variable. But this would be a problem given that my response values are only 0 and 1. Log of 1 is 0 and Log of 0 is undefined. 
+
+### 3: NORMALITY OF RESIDUALS
+### Based on the Q-Q plot of the residuals, these don't really follow a straight line. Visually, I know the residuals are not normally distributed. 
+
+### 4: NO MULTICOLLINEARITY
+### There were only two predictors that were highly correlated with each other: Last_purchase and First_purchase have a correlation coefficient of 0.814.
+### This was addressed by removing Last_purchase from the model.
+
+cor(train)
+
+
+```
+
+
+```{r}
+#### The Linear Regression Model did not fulfill all 4 of the assumptions. 
+#### But I am still going to run it on the test data set. 
+#### When examining the predicted values, I see that the minimum value is negative, -0.37, and the max is 0.94. 
+#### Ignoring the fact that the model failed 3 of the 4 assumptions, the predicted values are not particularly useful and
+#### are difficult to interpret. This telle me, again, that the multiple linear regressionapproach is not the best when answering this type of business problem. 
+
+pred.linear.mod = predict(linear.mod, newdata=test)
+summary(pred.linear.mod)
+
+### Creating a confusion matrix would not be useful either. My predicted values do not even include the two only possible response values of 0 or 1. It's also not entirely clear that I could take the predicted values and consider them to be 
+###probabilities, the way one might do with a logistic regression.We don't need to create a confusion matrix to know that the accuracy rate of the model is 0%. But if were to interpret the predicted values as "crude probability estimates" (ISLR) and  associate a range of predicted values to 0 or 1, then my accuracy rate would be 90%. 
+
+pred.linearmodel = ifelse(pred.linear.mod>= 0.5, "1", "0")
+caret::confusionMatrix(as.factor(test$Choice), as.factor(pred.linearmodel))
+
+head(pred.linearmodel)
+head(test$Choice)
+
+``` 
